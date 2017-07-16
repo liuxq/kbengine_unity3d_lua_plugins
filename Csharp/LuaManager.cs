@@ -62,7 +62,7 @@ public class LuaManager :MonoBehaviour{
     void InitLuaPath() {
         string rootPath = Application.dataPath;
         lua.AddSearchPath(rootPath + "/Lua");
-        lua.AddSearchPath(rootPath + "/KbenginePlugins/Lua");
+        lua.AddSearchPath(rootPath + "/kbengine_unity3d_lua_plugins/Lua");
         lua.AddSearchPath(rootPath + "/ToLua/Lua");
     }
 
