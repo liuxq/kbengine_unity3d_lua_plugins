@@ -9,19 +9,8 @@ namespace KBEngine
 {
     public static class KBELuaUtil
     {
-        private static LuaManager luaMgr = null;
-
-        private static LuaManager GetLuaMgr()
-        {
-            if (luaMgr == null)
-            {
-                GameObject go = GameObject.Find("Manager");
-                if(go != null)
-                    luaMgr = go.GetComponent<LuaManager>();
-            }
-            return luaMgr;
-        }
-
+        public delegate object[] CallLuaFunction(string funcName, params object[] args);
+        private static CallLuaFunction callFunction = null;
         public static byte[] Utf8ToByte(object utf8)
         {
             return System.Text.Encoding.UTF8.GetBytes((string)utf8);
@@ -52,19 +41,34 @@ namespace KBEngine
             Debug.LogError(str);
         }
 
+        public static void SetCallLuaFunction(CallLuaFunction clf)
+        {
+            callFunction = clf;
+        }
+
+        public static void ClearCallLuaFunction()
+        {
+            callFunction = null;
+        }
         /// <summary>
         /// 执行Lua方法..
         /// </summary>
         public static object[] CallMethod(string module, string func, params object[] args)
         {
-            if (GetLuaMgr() == null) return null;
-            return GetLuaMgr().CallFunction(module + "." + func, args);
+            if(callFunction != null)
+            {
+                return callFunction(module + "." + func, args);
+            }
+            return null;
         }
 
         public static object[] CallMethod(string func, params object[] args)
         {
-            if (GetLuaMgr() == null) return null;
-            return GetLuaMgr().CallFunction(func, args);
+            if (callFunction != null)
+            {
+                return callFunction(func, args);
+            }
+            return null;
         }
 
         public static void createFile(string path, string name, byte[] datas)
