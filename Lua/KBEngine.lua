@@ -72,7 +72,7 @@ KBEngineLua._clientdatas = {};
 KBEngineLua._encryptedKey = "";
 
 -- 服务端与客户端的版本号以及协议MD5
-KBEngineLua.clientVersion = "0.9.12";
+KBEngineLua.clientVersion = "1.0.0";
 KBEngineLua.clientScriptVersion = "0.1.0";
 KBEngineLua.serverVersion = "";
 KBEngineLua.serverScriptVersion = "";
