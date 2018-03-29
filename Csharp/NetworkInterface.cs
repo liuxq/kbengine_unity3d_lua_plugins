@@ -28,6 +28,8 @@
 		PacketReceiver _packetReceiver = null;
 		PacketSender _packetSender = null;
 
+		public bool connected = false;
+		
 		public class ConnectState
 		{
 			// for connect
@@ -66,6 +68,7 @@
 			_socket = null;
 			_packetReceiver = null;
 			_packetSender = null;
+			connected = false;
 		}
 		
 
@@ -79,6 +82,7 @@
             }
 
             _socket = null;
+            connected = false;
         }
 
 		public virtual PacketReceiver packetReceiver()
@@ -101,10 +105,12 @@
 				Dbg.DEBUG_MSG(string.Format("NetworkInterface::_onConnectionState(), connect to {0} is success!", state.socket.RemoteEndPoint.ToString()));
 				_packetReceiver = new PacketReceiver(this);
 				_packetReceiver.startRecv();
+				connected = true;
 			}
 			else
 			{
-				Dbg.ERROR_MSG(string.Format("NetworkInterface::_onConnectionState(), connect is error! ip: {0}:{1}, err: {2}", state.connectIP, state.connectPort, state.error));
+				reset();
+				Dbg.ERROR_MSG(string.Format("NetworkInterface::_onConnectionState(), connect error! ip: {0}:{1}, err: {2}", state.connectIP, state.connectPort, state.error));
 			}
 
             KBELuaUtil.CallMethod("Event", "Brocast", new object[] { "onConnectionState", success });
@@ -201,9 +207,11 @@
 			state.networkInterface = this;
 
 			Dbg.DEBUG_MSG("connect to " + ip + ":" + port + " ...");
-
+			connected = false;
+			
 			// 先注册一个事件回调，该事件在当前线程触发
 			Event.registerIn("_onConnectionState", this, "_onConnectionState");
+
 			var v = new AsyncConnectMethod(this._asyncConnect);
 			v.BeginInvoke(state, new AsyncCallback(this._asyncConnectCB), state);
 		}

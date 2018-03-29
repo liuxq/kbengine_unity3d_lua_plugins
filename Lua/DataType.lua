@@ -406,7 +406,7 @@ KBEngineLua.DATATYPE_UNICODE =
 	end
 }
 
-KBEngineLua.DATATYPE_MAILBOX =
+KBEngineLua.DATATYPE_ENTITYCALL =
 {
 	bind = function(self)
 	end,
@@ -570,7 +570,7 @@ KBEngineLua.datatypes["VECTOR3"]	= KBEngineLua.DATATYPE_VECTOR3;
 KBEngineLua.datatypes["VECTOR4"]	= KBEngineLua.DATATYPE_VECTOR4;
 KBEngineLua.datatypes["PYTHON"]	= KBEngineLua.DATATYPE_PYTHON;
 KBEngineLua.datatypes["UNICODE"]	= KBEngineLua.DATATYPE_UNICODE;
-KBEngineLua.datatypes["MAILBOX"]	= KBEngineLua.DATATYPE_MAILBOX;
+KBEngineLua.datatypes["ENTITYCALL"]	= KBEngineLua.DATATYPE_ENTITYCALL;
 KBEngineLua.datatypes["BLOB"]		= KBEngineLua.DATATYPE_BLOB;
 
 KBEngineLua.datatypes[1] = KBEngineLua.datatypes["STRING"];

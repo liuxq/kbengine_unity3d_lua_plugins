@@ -6,7 +6,7 @@ require "LuaUtil"
 require "DataType"
 require "Message"
 require "Bundle"
-require "Mailbox"
+require "EntityCall"
 require "Entity"
 require "PersistentInfos"
 
@@ -28,8 +28,7 @@ KBEngineLua.useAliasEntityID = true;
 -----------------end-------------------------
 
 
-KBEngineLua.MAILBOX_TYPE_CELL = 0;
-KBEngineLua.MAILBOX_TYPE_BASE = 1;
+
 KBEngineLua.KBE_FLT_MAX	= 3.402823466e+38;
 
 ------debug级别
@@ -72,7 +71,7 @@ KBEngineLua._clientdatas = {};
 KBEngineLua._encryptedKey = "";
 
 -- 服务端与客户端的版本号以及协议MD5
-KBEngineLua.clientVersion = "1.0.0";
+KBEngineLua.clientVersion = "1.1.5";
 KBEngineLua.clientScriptVersion = "0.1.0";
 KBEngineLua.serverVersion = "";
 KBEngineLua.serverScriptVersion = "";
@@ -82,7 +81,12 @@ KBEngineLua.serverEntitydefMD5 = "";
 -- 各种存储结构
 KBEngineLua.moduledefs = {};
 KBEngineLua.serverErrs = {};
+
+-- 所有实体都保存于这里， 请参看API手册关于entities部分
+-- https://github.com/kbengine/kbengine/tree/master/docs/api
 KBEngineLua.entities = {};
+
+-- 在玩家View范围小于256个实体时我们可以通过一字节索引来找到entity
 KBEngineLua.entityIDAliasIDList = {};
 KBEngineLua.bufferedCreateEntityMessage = {};
 
@@ -104,6 +108,8 @@ KBEngineLua._lastUpdateToServerTime = os.clock();
 
 --网络接口
 KBEngineLua._networkInterface = nil;
+
+KBEngineLua.deg2rad = Mathf.PI / 180;
 
 
 KBEngineLua.GetArgs = function()
@@ -264,7 +270,7 @@ KBEngineLua.Client_onImportClientEntityDef = function(stream)
 end
 
 KBEngineLua.onImportClientEntityDef = function(stream)
-	KBEngineLua.createDataTypeFromStreams(stream, false);
+	this.createDataTypeFromStreams(stream, false);
 
 	while(stream:length() > 0)
 	do
@@ -312,7 +318,7 @@ KBEngineLua.onImportClientEntityDef = function(stream)
 			local savedata = {properUtype, aliasID, name, defaultValStr, utype, setmethod, properFlags};
 			self_propertys[name] = savedata;
 			
-			if(aliasID >= 0) then
+			if(aliasID ~= -1) then
 				self_propertys[aliasID] = savedata;
 				currModuleDefs["usePropertyDescrAlias"] = true;
 			else
@@ -341,7 +347,7 @@ KBEngineLua.onImportClientEntityDef = function(stream)
 			local savedata = {methodUtype, aliasID, name, args};
 			self_methods[name] = savedata;
 			
-			if(aliasID >= 0) then
+			if(aliasID ~= -1) then
 				self_methods[aliasID] = savedata;
 				currModuleDefs["useMethodDescrAlias"] = true;
 			else
@@ -554,7 +560,7 @@ KBEngineLua.onImportEntityDefCompleted = function()
 end
 KBEngineLua.Client_onCreatedProxies = function(rndUUID, eid, entityType)
 
-	log("KBEngineApp::Client_onCreatedProxies: eid(" .. eid .. "), entityType(" .. entityType .. ")!");
+	--log("KBEngineApp::Client_onCreatedProxies: eid(" .. eid .. "), entityType(" .. entityType .. ")!");
 	
 	this.entity_uuid = rndUUID;
 	this.entity_id = eid;
@@ -573,10 +579,10 @@ KBEngineLua.Client_onCreatedProxies = function(rndUUID, eid, entityType)
 		entity.id = eid;
 		entity.className = entityType;
 		
-		entity.base = KBEngineLua.Mailbox:New();
-		entity.base.id = eid;
-		entity.base.className = entityType;
-		entity.base.type = KBEngineLua.MAILBOX_TYPE_BASE;
+		entity.baseEntityCall = KBEngineLua.EntityCall:New();
+		entity.baseEntityCall.id = eid;
+		entity.baseEntityCall.className = entityType;
+		entity.baseEntityCall.type = KBEngineLua.ENTITYCALL_TYPE_BASE;
 		
 		KBEngineLua.entities[eid] = entity;
 		
@@ -601,7 +607,7 @@ KBEngineLua.Client_onCreatedProxies = function(rndUUID, eid, entityType)
 	end
 end
 
-KBEngineLua.getAoiEntityIDFromStream = function(stream)
+KBEngineLua.getViewEntityIDFromStream = function(stream)
 	if not this.useAliasEntityID then
 		return stream:readInt32();
 	end
@@ -680,7 +686,7 @@ KBEngineLua.onUpdatePropertys_ = function(eid, stream)
 end
 
 KBEngineLua.Client_onUpdatePropertysOptimized = function(stream)
-	local eid = KBEngineLua.getAoiEntityIDFromStream(stream);
+	local eid = KBEngineLua.getViewEntityIDFromStream(stream);
 	KBEngineLua.onUpdatePropertys_(eid, stream);
 end
 
@@ -719,7 +725,7 @@ KBEngineLua.onRemoteMethodCall_ = function(eid, stream)
 end
 
 KBEngineLua.Client_onRemoteMethodCallOptimized = function(stream)
-	local eid = KBEngineLua.getAoiEntityIDFromStream(stream);
+	local eid = KBEngineLua.getViewEntityIDFromStream(stream);
 	KBEngineLua.onRemoteMethodCall_(eid, stream);
 end
 
@@ -728,6 +734,8 @@ KBEngineLua.Client_onRemoteMethodCall = function(stream)
 	KBEngineLua.onRemoteMethodCall_(eid, stream);
 end
 
+
+--服务端通知一个实体进入了世界(如果实体是当前玩家则玩家第一次在一个space中创建了， 如果是其他实体则是其他实体进入了玩家的View)
 KBEngineLua.Client_onEntityEnterWorld = function(stream)
 	local eid = stream:readInt32();
 	if(KBEngineLua.entity_id > 0 and eid ~= KBEngineLua.entity_id) then
@@ -768,10 +776,10 @@ KBEngineLua.Client_onEntityEnterWorld = function(stream)
 		entity.id = eid;
 		entity.className = entityType;
 
-		entity.cell = KBEngineLua.Mailbox:New();
-		entity.cell.id = eid;
-		entity.cell.className = entityType;
-		entity.cell.type = KBEngineLua.MAILBOX_TYPE_CELL;
+		entity.cellEntityCall = KBEngineLua.EntityCall:New();
+		entity.cellEntityCall.id = eid;
+		entity.cellEntityCall.className = entityType;
+		entity.cellEntityCall.type = KBEngineLua.ENTITYCALL_TYPE_CELL;
 		
 		KBEngineLua.entities[eid] = entity;
 		
@@ -792,10 +800,10 @@ KBEngineLua.Client_onEntityEnterWorld = function(stream)
 		entity:set_position(entity.position);
 	else
 		if(not entity.inWorld) then
-			entity.cell = KBEngineLua.Mailbox:New();
-			entity.cell.id = eid;
-			entity.cell.className = entityType;
-			entity.cell.type = KBEngineLua.MAILBOX_TYPE_CELL;
+			entity.cellEntityCall = KBEngineLua.EntityCall:New();
+			entity.cellEntityCall.id = eid;
+			entity.cellEntityCall.className = entityType;
+			entity.cellEntityCall.type = KBEngineLua.ENTITYCALL_TYPE_CELL;
 
 			-- 安全起见， 这里清空一下
 			-- 如果服务端上使用giveClientTo切换控制权
@@ -822,11 +830,15 @@ KBEngineLua.Client_onEntityEnterWorld = function(stream)
 	end
 end
 
+
+--服务端使用优化的方式通知一个实体离开了世界(如果实体是当前玩家则玩家离开了space， 如果是其他实体则是其他实体离开了玩家的View)
 KBEngineLua.Client_onEntityLeaveWorldOptimized = function(stream)
-	local eid = KBEngineLua.getAoiEntityIDFromStream(stream);
+	local eid = KBEngineLua.getViewEntityIDFromStream(stream);
 	KBEngineLua.Client_onEntityLeaveWorld(eid);
 end
 
+
+--服务端通知一个实体离开了世界(如果实体是当前玩家则玩家离开了space， 如果是其他实体则是其他实体离开了玩家的View)
 KBEngineLua.Client_onEntityLeaveWorld = function(eid)
 	local entity = KBEngineLua.entities[eid];
 	if(entity == nil) then
@@ -840,7 +852,7 @@ KBEngineLua.Client_onEntityLeaveWorld = function(eid)
 
 	if(this.entity_id == eid) then
 		this.clearSpace(false);
-		entity.cell = nil;
+		entity.cellEntityCall = nil;
 	else
 		table.removeItem(this.controlledEntities, entity, false);
 		--if(_controlledEntities.Remove(entity))
@@ -876,6 +888,7 @@ KBEngineLua.Client_onEntityDestroyed = function(eid)
 
 end
 
+--服务端通知当前玩家进入了一个新的space
 KBEngineLua.Client_onEntityEnterSpace = function(stream)
 
 	local eid = stream:readInt32();
@@ -992,9 +1005,27 @@ KBEngineLua.updatePlayerToServer = function()
 		bundle:writeFloat(player.position.x);
 		bundle:writeFloat(player.position.y);
 		bundle:writeFloat(player.position.z);
-		bundle:writeFloat(player.direction.x);
-		bundle:writeFloat(player.direction.y);
-		bundle:writeFloat(player.direction.z);
+
+		local x = player.direction.x * KBEngineLua.deg2rad;
+		local y = player.direction.y * KBEngineLua.deg2rad;
+		local z = player.direction.z * KBEngineLua.deg2rad;
+		-- 根据弧度转角度公式会出现负数
+		-- unity会自动转化到0~360度之间，这里需要做一个还原
+		if(x - Mathf.PI > 0.0) then
+			x = x - Mathf.PI * 2;
+		end
+
+		if(y - Mathf.PI > 0.0) then
+			y = y - Mathf.PI * 2;
+		end
+		
+		if(z - Mathf.PI > 0.0) then
+			z = z - Mathf.PI * 2;
+		end
+
+		bundle:writeFloat(x);
+		bundle:writeFloat(y);
+		bundle:writeFloat(z);
 		bundle:writeUint8((player.isOnGround and 1) or 0);
 		bundle:writeUint32(this.spaceID);
 		bundle:send();
@@ -1180,7 +1211,7 @@ end
 
 KBEngineLua.Client_onUpdateData = function(stream)
 
-	local eid = KBEngineLua.getAoiEntityIDFromStream(stream);
+	local eid = KBEngineLua.getViewEntityIDFromStream(stream);
 	local entity = KBEngineLua.entities[eid];
 	if(entity == nil) then
 		log("KBEngineApp::Client_onUpdateData: entity(" .. eid .. ") not found!");
@@ -1218,7 +1249,7 @@ end
 
 KBEngineLua.Client_onUpdateData_ypr = function(stream)
 
-	local eid = KBEngineLua.getAoiEntityIDFromStream(stream);
+	local eid = KBEngineLua.getViewEntityIDFromStream(stream);
 	
 	local y = stream:readInt8();
 	local p = stream:readInt8();
@@ -1229,7 +1260,7 @@ end
 
 KBEngineLua.Client_onUpdateData_yp = function(stream)
 
-	local eid = KBEngineLua.getAoiEntityIDFromStream(stream);
+	local eid = KBEngineLua.getViewEntityIDFromStream(stream);
 	
 	local y = stream:readInt8();
 	local p = stream:readInt8();
@@ -1239,7 +1270,7 @@ end
 
 KBEngineLua.Client_onUpdateData_yr = function(stream)
 
-	local eid = KBEngineLua.getAoiEntityIDFromStream(stream);
+	local eid = KBEngineLua.getViewEntityIDFromStream(stream);
 	
 	local y = stream:readInt8();
 	local r = stream:readInt8();
@@ -1249,7 +1280,7 @@ end
 
 KBEngineLua.Client_onUpdateData_pr = function(stream)
 
-	local eid = KBEngineLua.getAoiEntityIDFromStream(stream);
+	local eid = KBEngineLua.getViewEntityIDFromStream(stream);
 	
 	local p = stream:readInt8();
 	local r = stream:readInt8();
@@ -1259,7 +1290,7 @@ end
 
 KBEngineLua.Client_onUpdateData_y = function(stream)
 
-	local eid = KBEngineLua.getAoiEntityIDFromStream(stream);
+	local eid = KBEngineLua.getViewEntityIDFromStream(stream);
 	
 	local y = stream:readInt8();
 	
@@ -1268,7 +1299,7 @@ end
 
 KBEngineLua.Client_onUpdateData_p = function(stream)
 
-	local eid = KBEngineLua.getAoiEntityIDFromStream(stream);
+	local eid = KBEngineLua.getViewEntityIDFromStream(stream);
 	
 	local p = stream:readInt8();
 	
@@ -1277,7 +1308,7 @@ end
 
 KBEngineLua.Client_onUpdateData_r = function(stream)
 
-	local eid = KBEngineLua.getAoiEntityIDFromStream(stream);
+	local eid = KBEngineLua.getViewEntityIDFromStream(stream);
 	
 	local r = stream:readInt8();
 	
@@ -1286,7 +1317,7 @@ end
 
 KBEngineLua.Client_onUpdateData_xz = function(stream)
 
-	local eid = KBEngineLua.getAoiEntityIDFromStream(stream);
+	local eid = KBEngineLua.getViewEntityIDFromStream(stream);
 	
 	local xz = stream:readPackXZ();
 	
@@ -1295,7 +1326,7 @@ end
 
 KBEngineLua.Client_onUpdateData_xz_ypr = function(stream)
 
-	local eid = KBEngineLua.getAoiEntityIDFromStream(stream);
+	local eid = KBEngineLua.getViewEntityIDFromStream(stream);
 	
 	local xz = stream:readPackXZ();
 
@@ -1308,7 +1339,7 @@ end
 
 KBEngineLua.Client_onUpdateData_xz_yp = function(stream)
 
-	local eid = KBEngineLua.getAoiEntityIDFromStream(stream);
+	local eid = KBEngineLua.getViewEntityIDFromStream(stream);
 	
 	local xz = stream:readPackXZ();
 
@@ -1320,7 +1351,7 @@ end
 
 KBEngineLua.Client_onUpdateData_xz_yr = function(stream)
 
-	local eid = KBEngineLua.getAoiEntityIDFromStream(stream);
+	local eid = KBEngineLua.getViewEntityIDFromStream(stream);
 	
 	local xz = stream:readPackXZ();
 
@@ -1332,7 +1363,7 @@ end
 
 KBEngineLua.Client_onUpdateData_xz_pr = function(stream)
 
-	local eid = KBEngineLua.getAoiEntityIDFromStream(stream);
+	local eid = KBEngineLua.getViewEntityIDFromStream(stream);
 	
 	local xz = stream:readPackXZ();
 
@@ -1344,7 +1375,7 @@ end
 
 KBEngineLua.Client_onUpdateData_xz_y = function(stream)
 
-	local eid = KBEngineLua.getAoiEntityIDFromStream(stream);
+	local eid = KBEngineLua.getViewEntityIDFromStream(stream);
 	
 	local xz = stream:readPackXZ();
 
@@ -1355,7 +1386,7 @@ end
 
 KBEngineLua.Client_onUpdateData_xz_p = function(stream)
 
-	local eid = KBEngineLua.getAoiEntityIDFromStream(stream);
+	local eid = KBEngineLua.getViewEntityIDFromStream(stream);
 	
 	local xz = stream:readPackXZ();
 
@@ -1366,7 +1397,7 @@ end
 
 KBEngineLua.Client_onUpdateData_xz_r = function(stream)
 
-	local eid = KBEngineLua.getAoiEntityIDFromStream(stream);
+	local eid = KBEngineLua.getViewEntityIDFromStream(stream);
 	
 	local xz = stream:readPackXZ();
 
@@ -1377,7 +1408,7 @@ end
 
 KBEngineLua.Client_onUpdateData_xyz = function(stream)
 
-	local eid = KBEngineLua.getAoiEntityIDFromStream(stream);
+	local eid = KBEngineLua.getViewEntityIDFromStream(stream);
 	
 	local xz = stream:readPackXZ();
 	local y = stream:readPackY();
@@ -1387,7 +1418,7 @@ end
 
 KBEngineLua.Client_onUpdateData_xyz_ypr = function(stream)
 
-	local eid = KBEngineLua.getAoiEntityIDFromStream(stream);
+	local eid = KBEngineLua.getViewEntityIDFromStream(stream);
 	
 	local xz = stream:readPackXZ();
 	local y = stream:readPackY();
@@ -1401,7 +1432,7 @@ end
 
 KBEngineLua.Client_onUpdateData_xyz_yp = function(stream)
 
-	local eid = KBEngineLua.getAoiEntityIDFromStream(stream);
+	local eid = KBEngineLua.getViewEntityIDFromStream(stream);
 	
 	local xz = stream:readPackXZ();
 	local y = stream:readPackY();
@@ -1414,7 +1445,7 @@ end
 
 KBEngineLua.Client_onUpdateData_xyz_yr = function(stream)
 
-	local eid = KBEngineLua.getAoiEntityIDFromStream(stream);
+	local eid = KBEngineLua.getViewEntityIDFromStream(stream);
 	
 	local xz = stream:readPackXZ();
 	local y = stream:readPackY();
@@ -1427,7 +1458,7 @@ end
 
 KBEngineLua.Client_onUpdateData_xyz_pr = function(stream)
 
-	local eid = KBEngineLua.getAoiEntityIDFromStream(stream);
+	local eid = KBEngineLua.getViewEntityIDFromStream(stream);
 	
 	local xz = stream:readPackXZ();
 	local y = stream:readPackY();
@@ -1440,7 +1471,7 @@ end
 
 KBEngineLua.Client_onUpdateData_xyz_y = function(stream)
 
-	local eid = KBEngineLua.getAoiEntityIDFromStream(stream);
+	local eid = KBEngineLua.getViewEntityIDFromStream(stream);
 	
 	local xz = stream:readPackXZ();
 	local y = stream:readPackY();
@@ -1452,7 +1483,7 @@ end
 
 KBEngineLua.Client_onUpdateData_xyz_p = function(stream)
 
-	local eid = KBEngineLua.getAoiEntityIDFromStream(stream);
+	local eid = KBEngineLua.getViewEntityIDFromStream(stream);
 	
 	local xz = stream:readPackXZ();
 	local y = stream:readPackY();
@@ -1464,7 +1495,7 @@ end
 
 KBEngineLua.Client_onUpdateData_xyz_r = function(stream)
 
-	local eid = KBEngineLua.getAoiEntityIDFromStream(stream);
+	local eid = KBEngineLua.getViewEntityIDFromStream(stream);
 	
 	local xz = stream:readPackXZ();
 	local y = stream:readPackY();

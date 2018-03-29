@@ -51,7 +51,7 @@ end
 
 --输出日志--
 function log(str)
-    Dbg.INFO_MSG(str);
+    print(str);
 end
 
 --错误日志--

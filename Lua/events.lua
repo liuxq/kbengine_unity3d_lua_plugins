@@ -1,43 +1,44 @@
 --[[
-Auth:Chiuan
+Auth:Lxq
 like Unity Brocast Event System in lua.
 ]]
 
-local EventLib = require "eventlib"
+require "event"
 
 local Event = {}
 local events = {}
 
-function Event.AddListener(event,handler)
-	if not event or type(event) ~= "string" then
-		error("event parameter in addlistener function has to be string, " .. type(event) .. " not right.")
+function Event.AddListener(eventStr, func, obj)
+	if not eventStr or type(eventStr) ~= "string" then
+		error("eventStr parameter in addlistener function has to be string, " .. type(eventStr) .. " not right.")
 	end
-	if not handler or type(handler) ~= "function" then
-		error("handler parameter in addlistener function has to be function, " .. type(handler) .. " not right")
+	if not func or type(func) ~= "function" then
+		error("func parameter in addlistener function has to be function, " .. type(func) .. " not right")
 	end
 
-	if not events[event] then
+	if not events[eventStr] then
 		--create the Event with name
-		events[event] = EventLib:new(event)
+		events[eventStr] = event(eventStr, true)
 	end
 
-	--conn this handler
-	events[event]:connect(handler)
+	--add this func
+	events[eventStr]:AddListener(events[eventStr]:CreateListener(func, obj));
+
 end
 
-function Event.Brocast(event,...)
-	if not events[event] then
-		error("brocast " .. event .. " has no event.")
+function Event.Brocast(eventStr, ...)
+	if not events[eventStr] then
+		error("brocast " .. eventStr .. " has no event.")
 	else
-		events[event]:fire(...)
+		events[eventStr](...)
 	end
 end
 
-function Event.RemoveListener(event,handler)
-	if not events[event] then
-		error("remove " .. event .. " has no event.")
+function Event.RemoveListener(eventStr, func, obj)
+	if not events[eventStr] then
+		error("remove " .. eventStr .. " has no event.")
 	else
-		events[event]:disconnect(handler)
+		events[eventStr]:Remove(func, obj);
 	end
 end
 

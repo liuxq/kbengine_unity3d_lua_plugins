@@ -9,14 +9,17 @@ KBEngineLua.Entity =
 	-- 这两个属性是给引擎KBEngine.cs用的，别的地方不要修改
 	_entityLastLocalPos = Vector3.New(0.0, 0.0, 0.0),
 	_entityLastLocalDir = Vector3.New(0.0, 0.0, 0.0),
+
 	id = 0,
 	className = "",
 	position = Vector3.New(0.0, 0.0, 0.0),
 	direction = Vector3.New(0.0, 0.0, 0.0),
 	velocity = 0.0,
+
+	isOnGround = true,
 		
-	cell = nil,
-	base = nil,
+	baseEntityCall = nil,
+	cellEntityCall = nil,
 	
 	-- enterworld之后设置为true
 	inWorld = false,
@@ -81,8 +84,8 @@ KBEngineLua.Entity.baseCall = function(self, arguments)
 		return;
 	end
 
-	if(self.base == nil) then 
-		log('KBEngineLua.Entity::baseCall: base is None~');  
+	if(self.baseEntityCall == nil) then 
+		log('KBEngineLua.Entity::baseCall: baseEntityCall is None~');  
 		return;			
 	end
 	
@@ -95,17 +98,17 @@ KBEngineLua.Entity.baseCall = function(self, arguments)
 		return;
 	end
 	
-	self.base:newMail();
-	self.base.bundle:writeUint16(methodID);
+	self.baseEntityCall:newCall();
+	self.baseEntityCall.bundle:writeUint16(methodID);
 
 
 	for i=1, #args do
 		if(args[i]:isSameType(arguments[i + 1])) then
-			args[i]:addToStream(self.base.bundle, arguments[i + 1]);
+			args[i]:addToStream(self.baseEntityCall.bundle, arguments[i + 1]);
         end     
 	end
 	
-	self.base:postMail(nil);
+	self.baseEntityCall:sendCall(nil);
 end
 
 KBEngineLua.Entity.cellCall = function(self, arguments)
@@ -114,8 +117,8 @@ KBEngineLua.Entity.cellCall = function(self, arguments)
 		return;
 	end
 	
-	if(self.cell == nil) then
-		log('KBEngineLua.Entity::cellCall: cell is None!');  
+	if(self.cellEntityCall == nil) then
+		log('KBEngineLua.Entity::cellCall: cellEntityCall is None!');  
 		return;			
 	end
 	
@@ -128,16 +131,16 @@ KBEngineLua.Entity.cellCall = function(self, arguments)
 		return;
 	end
 	
-	self.cell:newMail();
-	self.cell.bundle:writeUint16(methodID);
+	self.cellEntityCall:newCall();
+	self.cellEntityCall.bundle:writeUint16(methodID);
 	
 	for i=1, #args do
 		if(args[i]:isSameType(arguments[i + 1])) then
-			args[i]:addToStream(self.cell.bundle, arguments[i + 1]);
+			args[i]:addToStream(self.cellEntityCall.bundle, arguments[i + 1]);
 		end
 	end
 	
-	self.cell:postMail(nil);
+	self.cellEntityCall:sendCall(nil);
 end
 	
 KBEngineLua.Entity.enterWorld = function(self)
