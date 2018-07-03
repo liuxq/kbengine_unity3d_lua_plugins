@@ -50,9 +50,7 @@ function logDbg(str)
 end
 
 --输出日志--
-function log(str)
-    print(str);
-end
+log = print
 
 --错误日志--
 function logError(str) 

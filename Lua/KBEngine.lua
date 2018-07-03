@@ -4,6 +4,7 @@ local this = KBEngineLua;
 
 require "LuaUtil"
 require "DataType"
+require "EntityDef"
 require "Message"
 require "Bundle"
 require "EntityCall"
@@ -51,6 +52,9 @@ KBEngineLua.spacedata = {};
 KBEngineLua.spaceID = 0;
 KBEngineLua.spaceResPath = "";
 KBEngineLua.isLoadedGeometry = false;
+
+--entityDef管理模块
+KBEngineLua.entityDef =KBEngineLua.EntityDef:New()
 
 -- 账号信息
 KBEngineLua.username = "kbengine";
@@ -157,6 +161,7 @@ KBEngineLua.resetMessages = function()
 	this.Message.clear();
 	this.moduledefs = {};
 	this.entities = {};
+    KBEngineLua.EntityDef.clear()
 
 	log("KBEngine::resetMessages()");
 end
@@ -228,7 +233,7 @@ KBEngineLua.createDataTypeFromStream = function(stream, canprint)
 	end
 		
 	if(canprint) then
-		log("KBEngineApp::Client_onImportClientEntityDef: importAlias(" .. name .. ":" .. valname .. ")!");
+		log("KBEngineApp::Client_onImportClientEntityDef: importAlias(" .. name .. ":" .. valname .. ":" .. utype .. ")!");
 	end
 	
 	if(name == "FIXED_DICT") then
@@ -281,8 +286,10 @@ KBEngineLua.onImportClientEntityDef = function(stream)
 		local base_methodsize = stream:readUint16();
 		local cell_methodsize = stream:readUint16();
 		
-		log("KBEngineApp::Client_onImportClientEntityDef: import(" .. scriptmodule_name .. "), propertys(" .. propertysize .. "), " ..
-				"clientMethods(" .. methodsize .. "), baseMethods(" .. base_methodsize .. "), cellMethods(" .. cell_methodsize .. ")~");
+		log("KBEngineApp::Client_onImportClientEntityDef: import(" .. scriptmodule_name ..
+                "), scriptUtype(" .. scriptUtype .. "), propertys(" .. propertysize .. "), " ..
+				"clientMethods(" .. methodsize .. "), baseMethods(" .. base_methodsize ..
+                "), cellMethods(" .. cell_methodsize .. ")~");
 		
 		KBEngineLua.moduledefs[scriptmodule_name] = {};
 		local currModuleDefs = KBEngineLua.moduledefs[scriptmodule_name];
@@ -468,8 +475,16 @@ KBEngineLua.onImportClientMessages = function( stream )
 			if handler == nil then
 				log("KBEngineApp::onImportClientMessages[" .. KBEngineLua.currserver .. "]: interface(" .. msgname .. "/" .. msgid .. ") no implement!");
 			else
-				log("KBEngineApp::onImportClientMessages: import(" .. msgname .. ") successfully!");
+                local txtFunc = string.format("KBEngineApp::onImportClientMessages[%s]: import(%s/%d) successfully!", KBEngineLua.currserver, msgname, msgid)
+                local txtParams = string.format("params: %s", table.tostr(argstypes))
+                local txtFuncInfo = string.format("%s\n%s", txtFunc, txtParams)
+				log(txtFuncInfo);
 			end
+        else
+            local txtFunc = string.format("KBEngineApp::onImportClientMessages[%s]: import(%s/%d) successfully!", KBEngineLua.currserver, msgname, msgid)
+            local txtParams = string.format("params: %s", table.tostr(argstypes))
+            local txtFuncInfo = string.format("%s\n%s", txtFunc, txtParams)
+            log(txtFuncInfo);
 		end
 	
 		if string.len(msgname) > 0 then
