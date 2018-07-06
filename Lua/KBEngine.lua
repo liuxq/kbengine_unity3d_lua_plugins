@@ -71,7 +71,7 @@ KBEngineLua._clientdatas = {};
 KBEngineLua._encryptedKey = "";
 
 -- 服务端与客户端的版本号以及协议MD5
-KBEngineLua.clientVersion = "1.1.5";
+KBEngineLua.clientVersion = "2.0.0";
 KBEngineLua.clientScriptVersion = "0.1.0";
 KBEngineLua.serverVersion = "";
 KBEngineLua.serverScriptVersion = "";
@@ -653,14 +653,23 @@ KBEngineLua.onUpdatePropertys_ = function(eid, stream)
 	local currModule = KBEngineLua.moduledefs[entity.className];
 	local pdatas = currModule.propertys;
 	while(stream:length() > 0) do
-		local utype = 0;
+		local _t_utype = 0;
+		local _t_child_utype = 0;
 		if(currModule.usePropertyDescrAlias) then
-			utype = stream:readUint8();
+			_t_utype = stream:readUint8();
+			_t_child_utype = stream:readUint8();
 		else
-			utype = stream:readUint16();
+			_t_utype = stream:readUint16();
+			_t_child_utype = stream.readUint16();
         end
 
-		local propertydata = pdatas[utype];
+		local propertydata = nil;
+        if(_t_utype == 0) then
+			propertydata = pdatas[_t_child_utype];
+		else
+			return;
+		end
+
 		local setmethod = propertydata[6];
 		local flags = propertydata[7];
 		local val = propertydata[5]:createFromStream(stream);
@@ -702,15 +711,27 @@ KBEngineLua.onRemoteMethodCall_ = function(eid, stream)
 		log("KBEngineApp::Client_onRemoteMethodCall: entity(" .. eid .. ") not found!");
 		return;
 	end
+
+	local sm = KBEngineLua.moduledefs[entity.className];
 	
 	local methodUtype = 0;
-	if(KBEngineLua.moduledefs[entity.className].useMethodDescrAlias) then
+	local componentPropertyUType = 0;
+
+	if(sm.useMethodDescrAlias) then
+		componentPropertyUType = stream:readUint8();
 		methodUtype = stream:readUint8();
 	else
+		componentPropertyUType = stream:readUint16();
 		methodUtype = stream:readUint16();
 	end
+
+	local methoddata = nil;
+	if(componentPropertyUType == 0) then
+		methoddata = sm.methods[methodUtype];
+	else
+		return;
+	end
 	
-	local methoddata = KBEngineLua.moduledefs[entity.className].methods[methodUtype];
 	local args = {};
 	local argsdata = methoddata[4];
 	for i=1, #argsdata do
@@ -1903,7 +1924,7 @@ KBEngineLua.onConnectTo_createAccount_callback = function(ip, port, success, use
 	this._lastTickCBTime = os.clock();
 
 	if( not success) then
-		log("KBEngine::createAccount_loginapp(): connect "..ip..":"..port.." is error!");
+		logError("KBEngine::createAccount_loginapp(): connect "..ip..":"..port.." is error!");
 		return;
 	end
 	
@@ -1917,7 +1938,7 @@ end
 KBEngineLua.Client_onVersionNotMatch = function(stream)
 	this.serverVersion = stream:readString();
 	
-	log("Client_onVersionNotMatch: verInfo=" .. this.clientVersion .. "(server: " .. this.serverVersion .. ")");
+	logError("Client_onVersionNotMatch: verInfo=" .. this.clientVersion .. "(server: " .. this.serverVersion .. ")");
 	--Event.fireAll("onVersionNotMatch", new object[]{clientVersion, serverVersion});
 	
 	if(this._persistentInfos ~= nil) then

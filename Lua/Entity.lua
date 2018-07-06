@@ -99,6 +99,7 @@ KBEngineLua.Entity.baseCall = function(self, arguments)
 	end
 	
 	self.baseEntityCall:newCall();
+	self.baseEntityCall.bundle:writeUint16(0);
 	self.baseEntityCall.bundle:writeUint16(methodID);
 
 
@@ -132,6 +133,7 @@ KBEngineLua.Entity.cellCall = function(self, arguments)
 	end
 	
 	self.cellEntityCall:newCall();
+	self.cellEntityCall.bundle:writeUint16(0);
 	self.cellEntityCall.bundle:writeUint16(methodID);
 	
 	for i=1, #args do
