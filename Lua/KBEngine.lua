@@ -476,13 +476,13 @@ KBEngineLua.onImportClientMessages = function( stream )
 				log("KBEngineApp::onImportClientMessages[" .. KBEngineLua.currserver .. "]: interface(" .. msgname .. "/" .. msgid .. ") no implement!");
 			else
                 local txtFunc = string.format("KBEngineApp::onImportClientMessages[%s]: import(%s/%d) successfully!", KBEngineLua.currserver, msgname, msgid)
-                local txtParams = string.format("params: %s", table.tostr(argstypes))
+                local txtParams = string.format("params: %s", tostring(argstypes))
                 local txtFuncInfo = string.format("%s\n%s", txtFunc, txtParams)
 				log(txtFuncInfo);
 			end
         else
             local txtFunc = string.format("KBEngineApp::onImportClientMessages[%s]: import(%s/%d) successfully!", KBEngineLua.currserver, msgname, msgid)
-            local txtParams = string.format("params: %s", table.tostr(argstypes))
+            local txtParams = string.format("params: %s", tostring(argstypes))
             local txtFuncInfo = string.format("%s\n%s", txtFunc, txtParams)
             log(txtFuncInfo);
 		end
